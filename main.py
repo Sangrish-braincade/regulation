@@ -45,7 +45,7 @@ st.markdown("""
         color: #333;
     }
     .regulatory-alert {
-        background-color: #fff3cd;
+        background-color: #000000;
         border: 1px solid #ffeaa7;
         border-radius: 5px;
         padding: 1rem;
