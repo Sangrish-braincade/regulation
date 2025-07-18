@@ -3,9 +3,19 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from mistralai import Mistral
+from google.auth.transport.requests import Request
+from google.oauth2 import service_account
 import json
-import time
+import  requests
 from datetime import datetime
+
+MODEL_ID = "gemini-2.5-flash"
+PROJECT_ID = st.secrets["VERTEX_PROJECT_ID"]
+LOCATION = st.secrets["VERTEX_LOCATION"]
+
+# The JSON string for credentials will need to be parsed
+google_applications_credentials_json_str = st.secrets["GOOGLE_APPLICATIONS_CREDENTIALS_JSON"]
+GOOGLE_APPLICATIONS_CREDENTIALS_JSON = google_applications_credentials_json_str
 
 # Configure page
 st.set_page_config(
@@ -49,11 +59,62 @@ st.markdown("""
 
 # Initialize Mistral client
 @st.cache_resource
-def init_mistral_client():
-    api_key = "nBj4s44QE9sZvbIXVDsrG6o2HZwzjv2W"  # Hardcoded as requested
-    return Mistral(api_key=api_key)
+def get_access_token():
+    """Get access token using service account credentials"""
+    try:
+        service_account_info = json.loads(GOOGLE_APPLICATIONS_CREDENTIALS_JSON)
+        credentials = service_account.Credentials.from_service_account_info(
+            service_account_info,
+            scopes=['https://www.googleapis.com/auth/cloud-platform']
+        )
+        credentials.refresh(Request())
+        return credentials.token
+    except Exception as e:
+        print(f"Error getting access token: {e}")
+        return None
 
-client = init_mistral_client()
+def make_gemini_request(prompt: str, max_tokens: int = 1024, temperature: float = 0.1, system_prompt: str = None):
+    """Make a request to Gemini API with proper system prompt handling"""
+    access_token = get_access_token()
+    
+    if not access_token:
+        raise Exception("Failed to get access token")
+    
+    url = f"https://aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{LOCATION}/publishers/google/models/{MODEL_ID}:generateContent"
+    
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "contents": [
+            {
+                "role": "model",
+                "parts": [{"text": f"Please follow this system prompt to the end: {system_prompt}"}]
+            },
+            {
+                "role": "user",
+                "parts": [{"text": prompt}]
+            }
+        ],
+        "generationConfig": {
+            "maxOutputTokens": max_tokens,
+            "temperature": temperature
+        }
+    }
+    
+    response = requests.post(url, headers=headers, json=data)
+    response.raise_for_status()
+    
+    result = response.json()
+    
+    if "candidates" in result and len(result["candidates"]) > 0:
+        candidate = result["candidates"][0]
+        if "content" in candidate and "parts" in candidate["content"]:
+            return candidate["content"]["parts"][0].get("text", "")
+    
+    return ""
 
 # Load regulatory data
 @st.cache_data
@@ -123,16 +184,13 @@ def query_mistral_ai(user_message, regulatory_context):
     """
     
     try:
-        response = client.chat.complete(
-            model="mistral-large-latest",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ],
+        response = make_gemini_request(
+            prompt=user_message,
+            max_tokens=1024,
             temperature=0.3,
-            max_tokens=1000
+            system_prompt=system_prompt
         )
-        return response.choices[0].message.content
+        return response
     except Exception as e:
         return f"Error querying AI: {str(e)}"
 
