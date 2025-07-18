@@ -3,3 +3,12 @@ pandas
 plotly 
 mistralai
 openpyxl
+requests==2.31.0
+google-auth==2.23.0
+google-auth-oauthlib==1.0.0
+google-cloud-aiplatform==1.38.0
+tenacity==8.2.3
+asyncio
+python-dotenv==1.0.1
+streamlit ==1.45.1
+asyncpraw~=7.8.1
