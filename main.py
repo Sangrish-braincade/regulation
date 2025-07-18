@@ -57,8 +57,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize Mistral client
-@st.cache_resource
 def get_access_token():
     """Get access token using service account credentials"""
     try:
